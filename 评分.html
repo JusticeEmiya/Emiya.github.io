@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>AI评分智能体 | 演示模式+真实API+模型拉取</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            color: #EDEDED;
+            padding: 2rem;
+            min-height: 100vh;
+            background-color: #0A0A0F;
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAGrSURBVHgB7dqxTcNAGMbxb0uRogUyAAuwAANEYYGIDYiYIGIDIjZIgwQbRLIBZQJvkMgGkWyQig2I2AApEUVKlP/07yUdciTnk+U7+ZIsJwAAAAAAAAAAAAAAAAAAAAAAAAAA/Ncsy9K8vLzYfr+/WZZlsyzLZtd1H67r+mHb9pZl2W+aphmGYRjGtm2/2bb9TdO0fZZl37Is+zRN8y3Lsq9pmpY0TRMAAAAA/Gfbtp3neda27Yuu67Zerr7rus7TNE3TNE1TVVWquq7VNM28rus3TdN80zRN0zRN0zRNU1VVqqoqAQAAAMC2bVt1XfdK07Q0TdN0HMc1TdMyTdMyTdM0TdNUVZWq61pN07zXNE1r27YfNE3TNE3TNE3TNE1VVamqKgEAAADAtm1bVVX1SdM0L03TNE3TNE3TNE3TNE3TVFWVqqpS0zSvNE3T2rZtaZqmaZqmaZqmaZqqqlJVVQIAAACAbdu2qqrqRdM0TdM0TdM0TdM0TdM0TVVVqapKNQ2Jpmma1rZtS9M0TdM0TdM0TdM0VVWlqqoEAAAA4F+2bVuWZdl3XddnWZbNsiybZVn2fZqmWZZlX1VVqqpKdR3LNE3T2rZtaZqmaZqmaZqmaZqmqqpUVZUAAAAAAH+zLMv+5wAAAAAAAAAAAAAAAAAAAAAAAAAAgP/mBwH9QvL/qPSWAAAAAElFTkSuQmCC');
+            background-repeat: repeat;
+            background-blend-mode: overlay;
+            background-attachment: fixed;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 15% 30%, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.6) 90%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+        .brand-nav {
+            display: flex; justify-content: space-between; align-items: baseline;
+            flex-wrap: wrap; margin-bottom: 2rem; padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.15);
+        }
+        .logo-area {
+            font-size: 1.8rem; font-weight: 800;
+            background: linear-gradient(115deg, #FFF, #F97316);
+            background-clip: text; -webkit-background-clip: text; color: transparent;
+        }
+        .nav-links {
+            display: flex; gap: 2rem; font-size: 0.85rem; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .nav-links a {
+            color: #F97316; font-weight: 800; text-decoration: none; cursor: pointer;
+        }
+        .nav-links a.active { border-bottom: 2px solid #F97316; padding-bottom: 4px; }
+        .page { display: none; animation: fadeIn 0.3s; }
+        .page.active-page { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .grid-dual {
+            display: grid; grid-template-columns: 1fr 1.2fr; gap: 2rem;
+            margin: 2rem 0;
+        }
+        .dialog-card {
+            background: rgba(20,20,28,0.85); backdrop-filter: blur(12px);
+            border-radius: 36px; border: 1px solid rgba(255,255,255,0.15);
+            overflow: hidden;
+        }
+        .card-inner { padding: 2rem; }
+        textarea {
+            width: 100%; background: #111117; border: 1px solid #2A2A36;
+            border-radius: 28px; padding: 1rem; font-family: 'Inter', monospace;
+            color: #F0F0F0; resize: vertical;
+        }
+        textarea:focus { outline: none; border-color: #F97316; }
+        .btn-group { display: flex; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap; }
+        .btn {
+            padding: 0.7rem 1.4rem; border-radius: 40px; font-weight: 600;
+            border: none; cursor: pointer; display: inline-flex; align-items: center;
+            gap: 0.5rem; background: #1E1E28; color: #E0E0F0; border: 1px solid #333340;
+        }
+        .btn-primary { background: #F97316; color: white; border: none; }
+        .btn-primary:hover { background: #ea580c; transform: translateY(-2px); }
+        .total-score-block {
+            background: rgba(0,0,0,0.6); border-radius: 36px; padding: 1.2rem;
+            text-align: center; margin-bottom: 1.5rem;
+        }
+        .big-score { font-size: 4rem; font-weight: 800; color: #F97316; }
+        .dim-list { display: flex; flex-direction: column; gap: 1rem; margin: 1.5rem 0; }
+        .dim-item { display: flex; flex-direction: column; gap: 0.3rem; }
+        .dim-header {
+            display: flex; justify-content: space-between; font-size: 0.75rem;
+            font-weight: 600; text-transform: uppercase; color: #B0B0C8;
+        }
+        .progress-bg {
+            background: #26262F; border-radius: 20px; height: 6px; overflow: hidden;
+        }
+        .progress-fill {
+            background: #F97316; width: 0%; height: 100%; transition: width 0.6s ease;
+        }
+        .comment-card, .analysis-card, .thinking-card {
+            background: #14141C; border-radius: 28px; padding: 1rem; margin: 1rem 0;
+        }
+        .comment-card { border-left: 4px solid #F97316; }
+        .thinking-card { border: 1px solid #2A2A36; }
+        .thinking-header {
+            display: flex; justify-content: space-between; cursor: pointer;
+            color: #F97316; font-weight: 600;
+        }
+        .thinking-content {
+            margin-top: 0.8rem; font-size: 0.8rem; color: #B0B0C8;
+            white-space: pre-wrap; display: none;
+        }
+        .thinking-content.show { display: block; }
+        .api-form { max-width: 600px; margin: 1rem auto; text-align: left; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.3rem; color: #F97316; font-weight: 600; }
+        .form-group input, .form-group select {
+            width: 100%; padding: 0.7rem; background: #111117; border: 1px solid #333;
+            border-radius: 28px; color: #fff;
+        }
+        .demo-badge {
+            background: #F97316; color: #0A0A0F; border-radius: 40px;
+            padding: 0.2rem 0.8rem; font-size: 0.7rem; font-weight: bold;
+            display: inline-block; margin-left: 1rem;
+        }
+        .model-select-group {
+            display: flex; gap: 0.5rem; align-items: center;
+        }
+        .model-select-group select {
+            flex: 3;
+        }
+        .model-select-group button {
+            flex: 1;
+            padding: 0.6rem;
+        }
+        footer { margin-top: 2rem; text-align: center; font-size: 0.7rem; color: #5F5F77; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem; }
+        @media (max-width: 900px) { .grid-dual { grid-template-columns: 1fr; } .nav-links { gap: 1rem; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="brand-nav">
+        <div class="logo-area">评分小助手<span>.</span>AI</div>
+        <div class="nav-links">
+            <a data-page="home">🏠 首页</a>
+            <a data-page="brand">✨ 品牌</a>
+            <a data-page="scoring" class="active">🎯 评分</a>
+            <a data-page="api">🔐 API设置</a>
+            <a data-page="contacts">📞 联系</a>
+        </div>
+    </div>
+
+    <div class="page-content">
+        <!-- 首页 -->
+        <div id="homePage" class="page">
+            <div class="dialog-card"><div class="card-inner" style="text-align:center">
+                <h2 style="color:#F97316">欢迎使用 AI 评分智能体</h2>
+                <p>⭐ 内置演示模式：无需配置，点击「智能评分」立即体验完整AI思维链和五维评分。<br>
+                如需接入真实大模型（OpenAI/兼容接口），请前往「API设置」配置并拉取模型。</p>
+                <button class="btn btn-primary" id="gotoScoringBtn">前往评分</button>
+            </div></div>
+        </div>
+        <div id="brandPage" class="page"><div class="dialog-card"><div class="card-inner"><h2>品牌理念</h2><p>用AI赋能教育，公平透明。演示模式已内置完整评分逻辑，让您立即看到效果。</p></div></div></div>
+        
+        <!-- 评分页面 -->
+        <div id="scoringPage" class="page active-page">
+            <div class="grid-dual">
+                <div class="dialog-card">
+                    <div class="card-inner">
+                        <label style="font-weight:600;">学生作答 <span class="demo-badge">演示模式</span></label>
+                        <textarea id="studentAnswer" rows="6" placeholder="输入学生的回答..."></textarea>
+                        <div class="btn-group">
+                            <button id="scoreBtn" class="btn btn-primary"><i class="fas fa-microchip"></i> 智能评分</button>
+                            <button id="resetBtn" class="btn"><i class="fas fa-eraser"></i> 清空</button>
+                            <button id="exampleBtn" class="btn"><i class="fas fa-lightbulb"></i> 示例答案</button>
+                        </div>
+                        <div style="margin-top:1rem; font-size:0.7rem; color:#aaa;">
+                            <i class="fas fa-info-circle"></i> 当前为演示模式，点击即展示完整思维链。可配置真实API Key后切换。
+                        </div>
+                    </div>
+                </div>
+                <div class="dialog-card">
+                    <div class="card-inner" id="resultPanel">
+                        <div id="initialPlaceholder" style="text-align:center; padding:2rem;">
+                            <i class="fas fa-brain" style="font-size:2rem;"></i>
+                            <p>点击「智能评分」体验AI评分 + 思维链</p>
+                        </div>
+                        <div id="dynamicScoreArea" style="display: none;">
+                            <div class="total-score-block"><div class="big-score" id="totalScoreDisplay">0</div><div>综合得分 / 100</div></div>
+                            <div class="dim-list" id="dimensionList"></div>
+                            <div class="comment-card"><strong>智能评语</strong><div id="commentText"></div></div>
+                            <div class="analysis-card"><strong>详细分析</strong><div id="analysisDetail"></div></div>
+                            <div class="thinking-card">
+                                <div class="thinking-header" id="thinkingToggle">
+                                    <span><i class="fas fa-brain"></i> AI 思考过程（思维链）</span>
+                                    <i class="fas fa-chevron-up" id="thinkingIcon"></i>
+                                </div>
+                                <div id="thinkingContent" class="thinking-content show"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API 设置页面（增加模型拉取功能） -->
+        <div id="apiPage" class="page">
+            <div class="dialog-card"><div class="card-inner">
+                <h2 style="color:#F97316">API 配置（可选）</h2>
+                <p>如果不配置，将使用内置演示模式（已包含完整AI思维链）。配置后调用真实大模型。</p>
+                <div class="api-form">
+                    <div class="form-group">
+                        <label>API 提供商</label>
+                        <select id="apiProviderSelect">
+                            <option value="demo">演示模式（无需Key）</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="custom">自定义 (OpenAI兼容)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="apiKeyGroup">
+                        <label>API Key</label>
+                        <input type="password" id="apiKeyInput" placeholder="sk-..." autocomplete="off">
+                    </div>
+                    <div class="form-group" id="customEndpointGroup" style="display:none;">
+                        <label>自定义端点 URL</label>
+                        <input type="text" id="customEndpoint" placeholder="https://api.openai.com/v1">
+                    </div>
+                    <div class="form-group" id="modelGroup">
+                        <label>模型名称</label>
+                        <div class="model-select-group">
+                            <select id="modelSelect" style="display:none;"></select>
+                            <input type="text" id="modelName" placeholder="gpt-3.5-turbo" value="gpt-3.5-turbo">
+                            <button id="fetchModelsBtn" class="btn" style="margin-left:0.5rem;"><i class="fas fa-sync-alt"></i> 拉取模型</button>
+                        </div>
+                        <div id="modelFetchStatus" style="font-size:0.7rem; margin-top:0.3rem; color:#aaa;"></div>
+                    </div>
+                    <div class="btn-group" style="justify-content: space-between;">
+                        <button id="saveApiBtn" class="btn btn-primary">保存配置</button>
+                        <button id="clearApiBtn" class="btn">恢复演示模式</button>
+                        <button id="testApiBtn" class="btn"><i class="fas fa-vial"></i> 测试连接</button>
+                    </div>
+                    <div id="testResultArea" class="test-result" style="display:none; background:rgba(249,115,22,0.2); border-radius:20px; padding:0.5rem; margin-top:0.5rem;"></div>
+                    <div class="security-note" style="margin-top:1rem; font-size:0.7rem; color:#F97316;">
+                        <i class="fas fa-shield-alt"></i> 演示模式已内置完整AI思维链，无需任何配置即可使用。
+                    </div>
+                </div>
+            </div></div>
+        </div>
+        <div id="contactsPage" class="page"><div class="dialog-card"><div class="card-inner"><h2>联系我们</h2><p>📧 teacher@ai-scoring.com</p><p>💬 演示模式已包含全部功能，欢迎课堂使用。</p></div></div></div>
+    </div>
+    <footer>独立HTML文件 · 永久保存 · 内置AI思维链演示模式 · 支持拉取真实模型列表</footer>
+</div>
+
+<script>
+    // ======================= 演示模式 AI 评分（完整思维链） =======================
+    function demoAIScoring(answer) {
+        if (!answer.trim()) {
+            return {
+                scores: { "内容完整":0, "语言生动":0, "结构清晰":0, "翠北特色":0, "提示词质量":0 },
+                total: 0,
+                comment: "❌ 未检测到作答内容",
+                analysis: "请填写学生答案后再评分。",
+                thinking: "学生未输入任何内容，无法进行评分。请指导学生完成作答。"
+            };
+        }
+        const len = answer.length;
+        let complete = Math.min(20, Math.floor(len / 12) + 8);
+        let vivid = answer.match(/生动|形象|精彩|流畅|比喻|拟人/gi) ? 18 : (answer.match(/因为|所以|可以|能够/gi) ? 14 : 10);
+        let structure = answer.match(/首先|其次|然后|最后|第一|第二|综上所述/gi) ? 18 : (answer.split(/[。！？]/).length > 3 ? 15 : 10);
+        let unique = answer.match(/我认为|在我看来|独特|创新|批判|反思/gi) ? 17 : 10;
+        let promptQuality = Math.min(20, Math.floor(len / 20) + 8);
+        let total = complete + vivid + structure + unique + promptQuality;
+        total = Math.min(100, total);
+        
+        const thinking = `【AI 深度思考过程】\n1. 我首先分析了学生答案的长度：${len}个字符。内容完整度方面，${len > 80 ? '答案较为充实，覆盖了多个要点' : '答案偏简短，可能遗漏部分重要内容'}，因此内容完整度给 ${complete} 分。\n2. 语言生动性：检测到${answer.match(/生动|形象|精彩/gi) ? '生动词汇' : '较少修辞手法'}，表达${answer.match(/因为|所以/gi) ? '有一定逻辑连接' : '较为直白'}，综合给 ${vivid} 分。\n3. 结构清晰度：答案中有${answer.match(/首先|其次|最后/gi) ? '明显的逻辑连接词' : '缺乏层次标记'}，句子数量 ${answer.split(/[。！？]/).length} 句，结构${answer.split(/[。！？]/).length > 3 ? '较完整' : '稍显零散'}，评分 ${structure} 分。\n4. 翠北特色（创新思维）：${answer.match(/我认为|在我看来|独特/gi) ? '学生表达了个人观点，有一定独特性' : '主要是常规描述，创新性一般'}，得分 ${unique} 分。\n5. 提示词质量：答案基本贴合主题，但${len < 50 ? '细节不足' : '细节较丰富'}，评分 ${promptQuality} 分。\n6. 综合总分：${total} 分。\n总结：${total >= 85 ? '优秀，继续保持' : total >= 70 ? '良好，可加强某一方面' : '建议多练习逻辑结构和生动表达'}。`;
+        
+        let comment = "";
+        if (total >= 85) comment = "🎉 优秀！观点明确，表达流畅，思维链完整。";
+        else if (total >= 70) comment = "👍 良好！有一定基础，可在结构和创新上再提升。";
+        else comment = "📘 继续努力！建议多阅读优秀范例，丰富论证细节。";
+        
+        let analysis = `【详细分析】\n内容完整度: ${complete}/20\n语言生动性: ${vivid}/20\n结构清晰度: ${structure}/20\n翠北特色: ${unique}/20\n提示词质量: ${promptQuality}/20\n总体评价: ${comment}`;
+        
+        return {
+            scores: { "内容完整": complete, "语言生动": vivid, "结构清晰": structure, "翠北特色": unique, "提示词质量": promptQuality },
+            total: total,
+            comment: comment,
+            analysis: analysis,
+            thinking: thinking
+        };
+    }
+    
+    // 真实API调用（支持评分）
+    async function callRealAPI(answer, apiKey, baseUrl, model) {
+        const SCORING_CRITERIA = `【评分标准】每个维度满分20分，总分100分。\n1. 内容完整\n2. 语言生动\n3. 结构清晰\n4. 翠北特色\n5. 提示词质量\n输出JSON: {"scores":{"内容完整":0,"语言生动":0,"结构清晰":0,"翠北特色":0,"提示词质量":0},"total":0,"comment":"","analysis":"","thinking":""}`;
+        const endpoint = baseUrl.endsWith('/') ? baseUrl + 'chat/completions' : baseUrl + '/chat/completions';
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({
+                model: model,
+                messages: [{ role: "system", content: "你是评分老师，输出JSON。" }, { role: "user", content: `${SCORING_CRITERIA}\n学生答案：${answer}` }],
+                temperature: 0.3,
+                response_format: { type: "json_object" }
+            })
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        return JSON.parse(data.choices[0].message.content);
+    }
+    
+    // 拉取模型列表 (OpenAI兼容)
+    async function fetchModels(apiKey, baseUrl) {
+        const endpoint = baseUrl.endsWith('/') ? baseUrl + 'models' : baseUrl + '/models';
+        const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        if (!response.ok) throw new Error(`无法获取模型列表: ${response.status}`);
+        const data = await response.json();
+        if (!data.data || !Array.isArray(data.data)) throw new Error('响应格式不符合OpenAI规范');
+        return data.data.map(m => m.id).filter(id => typeof id === 'string');
+    }
+    
+    // 全局评分函数
+    async function performScoring() {
+        const answer = textarea.value.trim();
+        if (!answer) {
+            initialPlaceholder.style.display = 'none';
+            dynamicArea.style.display = 'block';
+            const empty = demoAIScoring("");
+            renderResult(empty);
+            return;
+        }
+        initialPlaceholder.style.display = 'none';
+        dynamicArea.style.display = 'block';
+        commentText.innerText = "🤖 AI 正在深度思考中...";
+        analysisDetail.innerText = "";
+        thinkingContent.innerText = "加载思维链...";
+        
+        const provider = localStorage.getItem('ai_provider') || 'demo';
+        if (provider !== 'demo') {
+            const apiKey = localStorage.getItem('ai_api_key');
+            let baseUrl = localStorage.getItem('ai_base_url');
+            if (!baseUrl) baseUrl = provider === 'openai' ? 'https://api.openai.com/v1' : '';
+            const model = localStorage.getItem('ai_model') || 'gpt-3.5-turbo';
+            if (apiKey && baseUrl) {
+                try {
+                    const realResult = await callRealAPI(answer, apiKey, baseUrl, model);
+                    renderResult(realResult);
+                    return;
+                } catch (err) {
+                    console.warn("真实API失败，降级到演示模式", err);
+                    commentText.innerText = `真实API调用失败，使用演示模式: ${err.message}`;
+                }
+            }
+        }
+        const demoResult = demoAIScoring(answer);
+        renderResult(demoResult);
+    }
+    
+    function renderResult(result) {
+        totalScoreDisplay.innerText = result.total;
+        dimensionList.innerHTML = '';
+        const dimOrder = ["内容完整","语言生动","结构清晰","翠北特色","提示词质量"];
+        for (let dim of dimOrder) {
+            let score = result.scores[dim] || 0;
+            let percent = (score / 20) * 100;
+            let div = document.createElement('div');
+            div.className = 'dim-item';
+            div.innerHTML = `<div class="dim-header"><span>${dim}</span><span>${score} / 20</span></div><div class="progress-bg"><div class="progress-fill" style="width:0%" data-target="${percent}%"></div></div>`;
+            dimensionList.appendChild(div);
+        }
+        commentText.innerText = result.comment;
+        analysisDetail.innerText = result.analysis;
+        thinkingContent.innerText = result.thinking || "（无思考过程）";
+        setTimeout(() => {
+            document.querySelectorAll('.progress-fill').forEach(el => {
+                let target = el.getAttribute('data-target');
+                if (target) el.style.width = target;
+            });
+        }, 50);
+    }
+    
+    // DOM 元素
+    const textarea = document.getElementById('studentAnswer');
+    const scoreBtn = document.getElementById('scoreBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const exampleBtn = document.getElementById('exampleBtn');
+    const initialPlaceholder = document.getElementById('initialPlaceholder');
+    const dynamicArea = document.getElementById('dynamicScoreArea');
+    const totalScoreDisplay = document.getElementById('totalScoreDisplay');
+    const dimensionList = document.getElementById('dimensionList');
+    const commentText = document.getElementById('commentText');
+    const analysisDetail = document.getElementById('analysisDetail');
+    const thinkingContent = document.getElementById('thinkingContent');
+    const thinkingToggle = document.getElementById('thinkingToggle');
+    const thinkingIcon = document.getElementById('thinkingIcon');
+    
+    let thinkingVisible = true;
+    function toggleThinking() {
+        thinkingVisible = !thinkingVisible;
+        thinkingContent.classList.toggle('show', thinkingVisible);
+        thinkingIcon.className = thinkingVisible ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+    }
+    thinkingToggle.addEventListener('click', toggleThinking);
+    thinkingContent.classList.add('show');
+    
+    function resetAll() { textarea.value = ''; initialPlaceholder.style.display = 'flex'; dynamicArea.style.display = 'none'; }
+    function loadExample() {
+        textarea.value = "人工智能对教育的影响非常深远。首先，它能够提供个性化学习路径，例如根据错题推荐练习。其次，AI助教可以随时答疑，减轻教师负担。然而，过度依赖技术会削弱学生的独立思考能力，因此需要平衡使用。综上所述，AI是教育的辅助工具，而非替代者。";
+        performScoring();
+    }
+    scoreBtn.addEventListener('click', performScoring);
+    resetBtn.addEventListener('click', resetAll);
+    exampleBtn.addEventListener('click', loadExample);
+    textarea.value = "人工智能可以帮助老师批改作业，还能给学生推荐练习题。但是要小心不要完全依赖AI。";
+    
+    // ========== API 设置页面逻辑（包含模型拉取） ==========
+    const apiProviderSelect = document.getElementById('apiProviderSelect');
+    const apiKeyGroup = document.getElementById('apiKeyGroup');
+    const customEndpointGroup = document.getElementById('customEndpointGroup');
+    const modelGroup = document.getElementById('modelGroup');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const customEndpointInput = document.getElementById('customEndpoint');
+    const modelNameInput = document.getElementById('modelName');
+    const modelSelect = document.getElementById('modelSelect');
+    const fetchModelsBtn = document.getElementById('fetchModelsBtn');
+    const modelFetchStatus = document.getElementById('modelFetchStatus');
+    const saveApiBtn = document.getElementById('saveApiBtn');
+    const clearApiBtn = document.getElementById('clearApiBtn');
+    const testApiBtn = document.getElementById('testApiBtn');
+    const testResultArea = document.getElementById('testResultArea');
+    
+    function updateApiFields() {
+        const val = apiProviderSelect.value;
+        if (val === 'demo') {
+            apiKeyGroup.style.display = 'none';
+            customEndpointGroup.style.display = 'none';
+            modelGroup.style.display = 'none';
+        } else if (val === 'openai') {
+            apiKeyGroup.style.display = 'block';
+            customEndpointGroup.style.display = 'none';
+            modelGroup.style.display = 'block';
+            customEndpointInput.value = 'https://api.openai.com/v1';
+        } else {
+            apiKeyGroup.style.display = 'block';
+            customEndpointGroup.style.display = 'block';
+            modelGroup.style.display = 'block';
+        }
+    }
+    apiProviderSelect.addEventListener('change', updateApiFields);
+    updateApiFields();
+    
+    // 拉取模型列表
+    fetchModelsBtn.addEventListener('click', async () => {
+        const provider = apiProviderSelect.value;
+        if (provider === 'demo') {
+            modelFetchStatus.innerHTML = '<span style="color:#ffaa66;">演示模式无需拉取模型，请切换到OpenAI或自定义模式。</span>';
+            return;
+        }
+        const apiKey = apiKeyInput.value.trim();
+        let baseUrl = '';
+        if (provider === 'openai') {
+            baseUrl = 'https://api.openai.com/v1';
+        } else {
+            baseUrl = customEndpointInput.value.trim();
+            if (!baseUrl) {
+                modelFetchStatus.innerHTML = '<span style="color:#f87171;">请填写自定义端点URL。</span>';
+                return;
+            }
+        }
+        if (!apiKey) {
+            modelFetchStatus.innerHTML = '<span style="color:#f87171;">请填写 API Key。</span>';
+            return;
+        }
+        modelFetchStatus.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 正在拉取模型列表...';
+        try {
+            const models = await fetchModels(apiKey, baseUrl);
+            if (models.length === 0) {
+                modelFetchStatus.innerHTML = '<span style="color:#ffaa66;">未获取到任何模型。</span>';
+                return;
+            }
+            // 填充下拉框
+            modelSelect.innerHTML = '';
+            for (let m of models) {
+                const option = document.createElement('option');
+                option.value = m;
+                option.textContent = m;
+                modelSelect.appendChild(option);
+            }
+            modelSelect.style.display = 'block';
+            modelNameInput.style.display = 'none';
+            modelSelect.value = models.includes('gpt-3.5-turbo') ? 'gpt-3.5-turbo' : models[0];
+            modelFetchStatus.innerHTML = `<span style="color:#4ade80;">✅ 成功拉取 ${models.length} 个模型，请选择一个。</span>`;
+        } catch (err) {
+            console.error(err);
+            modelFetchStatus.innerHTML = `<span style="color:#f87171;">❌ 不支持拉取模型: ${err.message}</span>`;
+            modelSelect.style.display = 'none';
+            modelNameInput.style.display = 'block';
+        }
+    });
+    
+    // 当用户手动选择模型时，同步到隐藏的modelNameInput
+    modelSelect.addEventListener('change', () => {
+        if (modelSelect.style.display !== 'none') {
+            modelNameInput.value = modelSelect.value;
+        }
+    });
+    
+    // 保存配置
+    saveApiBtn.addEventListener('click', () => {
+        const provider = apiProviderSelect.value;
+        if (provider === 'demo') {
+            localStorage.removeItem('ai_provider');
+            localStorage.removeItem('ai_api_key');
+            localStorage.removeItem('ai_base_url');
+            localStorage.removeItem('ai_model');
+            alert('已切换为演示模式，无需API Key即可使用完整AI评分和思维链。');
+            return;
+        }
+        const apiKey = apiKeyInput.value.trim();
+        if (!apiKey) { alert('请填写 API Key'); return; }
+        let baseUrl = '';
+        if (provider === 'openai') {
+            baseUrl = 'https://api.openai.com/v1';
+        } else {
+            baseUrl = customEndpointInput.value.trim();
+            if (!baseUrl) { alert('请填写自定义端点URL'); return; }
+        }
+        const model = modelNameInput.value.trim() || (modelSelect.style.display !== 'none' ? modelSelect.value : 'gpt-3.5-turbo');
+        localStorage.setItem('ai_provider', provider);
+        localStorage.setItem('ai_api_key', apiKey);
+        localStorage.setItem('ai_base_url', baseUrl);
+        localStorage.setItem('ai_model', model);
+        alert('真实API配置已保存。点击测试连接验证。');
+    });
+    
+    clearApiBtn.addEventListener('click', () => {
+        localStorage.removeItem('ai_provider');
+        localStorage.removeItem('ai_api_key');
+        localStorage.removeItem('ai_base_url');
+        localStorage.removeItem('ai_model');
+        apiProviderSelect.value = 'demo';
+        updateApiFields();
+        alert('已恢复演示模式。');
+    });
+    
+    testApiBtn.addEventListener('click', async () => {
+        const provider = apiProviderSelect.value;
+        if (provider === 'demo') {
+            testResultArea.style.display = 'block';
+            testResultArea.innerHTML = '<span style="color:#4ade80;">✅ 演示模式已激活，无需测试。点击评分即可看到思维链。</span>';
+            return;
+        }
+        const apiKey = apiKeyInput.value.trim();
+        let baseUrl = '';
+        if (provider === 'openai') {
+            baseUrl = 'https://api.openai.com/v1';
+        } else {
+            baseUrl = customEndpointInput.value.trim();
+        }
+        const model = modelNameInput.value.trim() || (modelSelect.style.display !== 'none' ? modelSelect.value : 'gpt-3.5-turbo');
+        if (!apiKey || !baseUrl) {
+            testResultArea.style.display = 'block';
+            testResultArea.innerHTML = '<span style="color:#ffaa66;">❌ 请填写 API Key 和端点</span>';
+            return;
+        }
+        testResultArea.style.display = 'block';
+        testResultArea.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 测试连接...';
+        try {
+            const testEndpoint = baseUrl.endsWith('/') ? baseUrl + 'chat/completions' : baseUrl + '/chat/completions';
+            const response = await fetch(testEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                body: JSON.stringify({ model: model, messages: [{ role: "user", content: "测试" }], max_tokens: 5 })
+            });
+            if (response.ok) testResultArea.innerHTML = '<span style="color:#4ade80;">✅ 连接成功！可以开始评分。</span>';
+            else testResultArea.innerHTML = `<span style="color:#f87171;">❌ 失败: ${response.status}</span>`;
+        } catch(e) { testResultArea.innerHTML = `<span style="color:#f87171;">❌ 网络错误: ${e.message}</span>`; }
+    });
+    
+    // 加载已保存的配置到UI
+    function loadSavedApiConfig() {
+        const provider = localStorage.getItem('ai_provider');
+        if (provider && provider !== 'demo') {
+            apiProviderSelect.value = provider;
+            apiKeyInput.value = localStorage.getItem('ai_api_key') || '';
+            if (provider === 'custom') {
+                customEndpointInput.value = localStorage.getItem('ai_base_url') || '';
+            }
+            const savedModel = localStorage.getItem('ai_model');
+            if (savedModel) modelNameInput.value = savedModel;
+        } else {
+            apiProviderSelect.value = 'demo';
+        }
+        updateApiFields();
+    }
+    loadSavedApiConfig();
+    
+    // 导航
+    const navLinks = document.querySelectorAll('.nav-links a');
+    const pages = {
+        home: document.getElementById('homePage'),
+        brand: document.getElementById('brandPage'),
+        scoring: document.getElementById('scoringPage'),
+        api: document.getElementById('apiPage'),
+        contacts: document.getElementById('contactsPage')
+    };
+    function switchPage(pageId) {
+        Object.values(pages).forEach(p => p.classList.remove('active-page'));
+        pages[pageId].classList.add('active-page');
+        navLinks.forEach(link => {
+            if (link.getAttribute('data-page') === pageId) link.classList.add('active');
+            else link.classList.remove('active');
+        });
+    }
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => { e.preventDefault(); switchPage(link.getAttribute('data-page')); });
+    });
+    document.getElementById('gotoScoringBtn')?.addEventListener('click', () => switchPage('scoring'));
+    switchPage('scoring');
+</script>
+</body>
+</html>
