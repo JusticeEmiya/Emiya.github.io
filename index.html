@@ -6,14 +6,15 @@
     <title>AI评分智能体 | 文件上传+多格式解析+评分</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- 引入第三方解析库 -->
-    <script src="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.min.js"></script>
-    <script src="https://unpkg.com/docxtemplater@3.37.12/build/docxtemplater.js"></script>
-    <script src="https://unpkg.com/pizzip@3.1.4/dist/pizzip.js"></script>
-    <script src="https://unpkg.com/pizzip@3.1.4/dist/pizzip-utils.js"></script>
-    <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
-    <script src="https://unpkg.com/tesseract.js@5.0.2/dist/tesseract.min.js"></script>
-    <script src="https://unpkg.com/unrar.js@0.7.0/unrar.js"></script>
+    <!-- 引入第三方解析库（替换为国内CDN加速） -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/docxtemplater/3.37.12/docxtemplater.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/pizzip/3.1.4/pizzip.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/pizzip/3.1.4/pizzip-utils.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- 使用国内镜像的Tesseract.js，加速语言包加载 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/tesseract.js/5.0.2/tesseract.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/unrar.js/0.7.0/unrar.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -205,6 +206,20 @@
             margin-top: 0.5rem;
             font-style: italic;
         }
+        /* 新增加载提示样式 */
+        .loading-toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(249, 115, 22, 0.9);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            z-index: 9999;
+            display: none;
+        }
 
         @media (max-width: 900px) { 
             .grid-dual { grid-template-columns: 1fr; } 
@@ -257,7 +272,8 @@
                                 <div class="upload-progress-bar" id="uploadProgressBar"></div>
                             </div>
                             <div class="file-info" id="fileInfo"></div>
-                            <div class="ocr-tips">提示：图片/扫描件会自动进行OCR文字识别，压缩包会解压缩后解析内部文件</div>
+                            <div class="ocr-tips">提示：图片/扫描件会自动进行OCR文字识别，压缩包会解压缩后解析内部文件<br>
+                            <span style="color:#F97316;">首次使用图片识别会下载语言包（约30MB），请耐心等待</span></div>
                         </div>
                         <textarea id="studentAnswer" rows="6" placeholder="输入学生的回答...或上传文件自动填充"></textarea>
                         <div class="btn-group">
@@ -339,6 +355,8 @@
         </div>
         <div id="contactsPage" class="page"><div class="dialog-card"><div class="card-inner"><h2>联系我们</h2><p>📧 teacher@ai-scoring.com</p><p>💬 支持多格式文件解析，欢迎课堂使用。</p></div></div></div>
     </div>
+    <!-- 加载提示弹窗 -->
+    <div class="loading-toast" id="loadingToast">正在加载资源，请稍候...</div>
     <footer>独立HTML文件 · 永久保存 · 多格式文件解析 · 内置AI思维链演示模式 · 支持拉取真实模型列表</footer>
 </div>
 
@@ -474,7 +492,19 @@
         }, 50);
     }
     
-    // ======================= 新增：文件解析核心功能 =======================
+    // ======================= 修复：文件解析核心功能 =======================
+    // 显示/隐藏加载提示
+    function showToast(text) {
+        const toast = document.getElementById('loadingToast');
+        toast.innerText = text;
+        toast.style.display = 'block';
+    }
+    
+    function hideToast() {
+        const toast = document.getElementById('loadingToast');
+        toast.style.display = 'none';
+    }
+
     // 1. PDF解析
     async function parsePDF(file) {
         return new Promise((resolve) => {
@@ -509,31 +539,61 @@
                     const text = doc.getFullText();
                     resolve(text);
                 } catch (e) {
-                    resolve('');
+                    resolve('Word文件解析失败：' + e.message);
                 }
             };
             reader.readAsArrayBuffer(file);
         });
     }
 
-    // 3. 图片OCR识别（支持JPG/PNG/JPC）
+    // 3. 图片OCR识别（修复卡顿问题）
     async function parseImage(file, progressCallback) {
-        return new Promise((resolve) => {
-            const worker = Tesseract.createWorker({
-                logger: m => {
-                    if (m.status === 'recognizing text' && progressCallback) {
-                        progressCallback(Math.floor(m.progress * 80) + 20); // OCR占20-100%进度
-                    }
-                }
-            });
-            (async () => {
+        return new Promise(async (resolve) => {
+            // 显示加载提示
+            showToast('正在加载OCR语言包，首次使用需下载约30MB资源...');
+            
+            try {
+                // 配置Tesseract使用国内镜像，加速语言包下载
+                const worker = Tesseract.createWorker({
+                    logger: m => {
+                        if (m.status === 'loading tesseract core') {
+                            showToast('正在加载OCR核心库...');
+                            progressCallback && progressCallback(10);
+                        } else if (m.status === 'loading language traineddata') {
+                            showToast('正在下载中文语言包...');
+                            progressCallback && progressCallback(20);
+                        } else if (m.status === 'initializing tesseract') {
+                            showToast('初始化OCR引擎...');
+                            progressCallback && progressCallback(40);
+                        } else if (m.status === 'recognizing text') {
+                            showToast('正在识别图片文字...');
+                            progressCallback && progressCallback(Math.floor(m.progress * 50) + 50);
+                        }
+                    },
+                    // 国内镜像地址，解决语言包下载慢的问题
+                    corePath: 'https://cdn.bootcdn.net/ajax/libs/tesseract.js-core/5.0.0/tesseract-core.wasm.js',
+                    langPath: 'https://tessdata.projectnaptha.com/4.1.0'
+                });
+
                 await worker.load();
                 await worker.loadLanguage('chi_sim+eng');
                 await worker.initialize('chi_sim+eng');
-                const { data: { text } } = await worker.recognize(file);
+                
+                // 转换文件为URL，提升识别效率
+                const imageUrl = URL.createObjectURL(file);
+                const { data: { text } } = await worker.recognize(imageUrl);
+                
                 await worker.terminate();
-                resolve(text);
-            })();
+                URL.revokeObjectURL(imageUrl);
+                hideToast();
+                
+                // 处理空识别结果
+                const finalText = text.trim() || '未识别到任何文字，请检查图片清晰度或尝试其他图片';
+                resolve(finalText);
+            } catch (e) {
+                hideToast();
+                resolve('图片识别失败：' + e.message + '（请检查网络或尝试刷新页面）');
+            }
         });
     }
 
@@ -549,6 +609,7 @@
                 
                 // 处理ZIP
                 if (fileExt === 'zip') {
+                    showToast('正在解压缩ZIP文件...');
                     const zip = new JSZip();
                     await zip.loadAsync(arrayBuffer);
                     const filePromises = [];
@@ -566,11 +627,13 @@
                     
                     const results = await Promise.all(filePromises);
                     allText = results.join('\n\n--- 分割线（来自压缩包内文件）---\n\n');
+                    hideToast();
                     resolve(allText);
                 } 
                 // 处理RAR（基础支持）
                 else if (fileExt === 'rar') {
                     try {
+                        showToast('正在解压缩RAR文件...');
                         const unrar = new UnRAR(arrayBuffer);
                         const entries = unrar.getEntries();
                         const filePromises = [];
@@ -589,8 +652,10 @@
                         
                         const results = await Promise.all(filePromises);
                         allText = results.join('\n\n--- 分割线（来自压缩包内文件）---\n\n');
+                        hideToast();
                         resolve(allText);
                     } catch (e) {
+                        hideToast();
                         resolve('RAR文件解析失败：' + e.message);
                     }
                 } else {
@@ -615,34 +680,51 @@
         return mimeMap[ext] || 'application/octet-stream';
     }
 
-    // 6. 单文件解析入口
+    // 6. 单文件解析入口（增加超时处理）
     async function parseSingleFile(file, progressCallback) {
-        if (progressCallback) progressCallback(10); // 开始解析
+        if (progressCallback) progressCallback(5); // 开始解析
         const fileName = file.name;
         const ext = fileName.split('.').pop().toLowerCase();
         let text = '';
 
+        // 设置超时处理，防止卡住
+        const timeoutPromise = new Promise((resolve) => {
+            setTimeout(() => {
+                resolve('文件解析超时，请尝试刷新页面或更换小文件');
+            }, 60000); // 60秒超时
+        });
+
         try {
-            switch (ext) {
-                case 'pdf':
-                    text = await parsePDF(file);
-                    break;
-                case 'docx':
-                    text = await parseDOCX(file);
-                    break;
-                case 'jpg':
-                case 'jpeg':
-                case 'png':
-                case 'jpc':
-                    text = await parseImage(file, progressCallback);
-                    break;
-                case 'zip':
-                case 'rar':
-                    text = await parseCompressedFile(file, progressCallback);
-                    break;
-                default:
-                    text = '不支持的文件格式';
-            }
+            const parsePromise = new Promise(async (resolve) => {
+                switch (ext) {
+                    case 'pdf':
+                        showToast('正在解析PDF文件...');
+                        text = await parsePDF(file);
+                        hideToast();
+                        break;
+                    case 'docx':
+                        showToast('正在解析Word文件...');
+                        text = await parseDOCX(file);
+                        hideToast();
+                        break;
+                    case 'jpg':
+                    case 'jpeg':
+                    case 'png':
+                    case 'jpc':
+                        text = await parseImage(file, progressCallback);
+                        break;
+                    case 'zip':
+                    case 'rar':
+                        text = await parseCompressedFile(file, progressCallback);
+                        break;
+                    default:
+                        text = '不支持的文件格式：' + ext;
+                }
+                resolve(text);
+            });
+
+            // 竞态：要么解析完成，要么超时
+            text = await Promise.race([parsePromise, timeoutPromise]);
         } catch (e) {
             text = `文件解析失败：${e.message}`;
         }
@@ -651,7 +733,7 @@
         return text;
     }
 
-    // 7. 文件上传处理
+    // 7. 文件上传处理（修复卡顿）
     function initFileUpload() {
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
@@ -694,36 +776,52 @@
             }
         });
 
-        // 处理选中的文件
+        // 处理选中的文件（修复核心卡顿问题）
         async function handleFiles(files) {
             const file = files[0]; // 只处理第一个文件
             if (!file) return;
 
+            // 限制文件大小（防止大文件卡顿）
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            if (file.size > maxSize) {
+                fileInfo.innerHTML = `<span style="color:#f87171;"><strong>错误：</strong>文件大小超过10MB，请拆分后上传</span>`;
+                fileInfo.style.display = 'block';
+                return;
+            }
+
             // 显示进度条
             progressContainer.style.display = 'block';
             progressBar.style.width = '0%';
-            fileInfo.style.display = 'none';
+            fileInfo.style.display = 'block';
 
             // 更新文件信息
             fileInfo.innerHTML = `<strong>正在解析：</strong>${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`;
-            fileInfo.style.display = 'block';
 
             // 更新进度
             const updateProgress = (percent) => {
                 progressBar.style.width = `${percent}%`;
             };
 
-            // 解析文件
-            const text = await parseSingleFile(file, updateProgress);
+            // 解析文件（增加错误捕获）
+            try {
+                const text = await parseSingleFile(file, updateProgress);
+                
+                // 强制填充文本到输入框（修复只显示"读取图片"的问题）
+                studentAnswer.value = text;
+                studentAnswer.dispatchEvent(new Event('input')); // 触发输入事件
+                
+                // 更新状态
+                fileInfo.innerHTML = `<strong>解析完成：</strong>${file.name}<br><strong>提取内容长度：</strong>${text.length} 字符`;
+                progressBar.style.width = '100%';
+                
+                // 自动触发评分（可选）
+                // performScoring();
+            } catch (e) {
+                fileInfo.innerHTML = `<span style="color:#f87171;"><strong>解析失败：</strong>${e.message}</span>`;
+                progressBar.style.width = '100%';
+            }
             
-            // 填充到文本框
-            studentAnswer.value = text;
-            
-            // 更新状态
-            fileInfo.innerHTML = `<strong>解析完成：</strong>${file.name}<br><strong>提取内容长度：</strong>${text.length} 字符`;
-            progressBar.style.width = '100%';
-            
-            // 3秒后隐藏进度条（可选）
+            // 3秒后隐藏进度条
             setTimeout(() => {
                 progressContainer.style.display = 'none';
             }, 3000);
@@ -757,6 +855,7 @@
         dynamicArea.style.display = 'none';
         document.getElementById('fileInfo').style.display = 'none';
         document.getElementById('uploadProgress').style.display = 'none';
+        hideToast(); // 重置时隐藏提示
     }
     
     function loadExample() {
